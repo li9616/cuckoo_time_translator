@@ -13,7 +13,7 @@ KalmanOwt::KalmanOwt(Config config) :
   R_ (0),
   isInitialized_(false),
   lastUpdateDeviceTime_(0),
-  dt_(0)
+  lastUpdateDt_(0)
 {
 }
 
@@ -28,7 +28,7 @@ LocalTime KalmanOwt::translateToLocalTimestamp(const RemoteTime remoteTimeTics) 
 
 void KalmanOwt::printNameAndConfig(std::ostream & out) const {
   out << "Kalman("
-      << "updateRate=" << config.updateRate
+      << "updateCooldownSecs=" << config.updateCooldownSecs
       << ", "
       << "sigmaSkew=" << config.sigmaSkew
       << ", "
@@ -42,7 +42,7 @@ void KalmanOwt::printNameAndConfig(std::ostream & out) const {
       << ")";
 }
 void KalmanOwt::printState(std::ostream & out) const {
-  out << "offset=" << std::fixed << x_(0) << ", skew=" << x_(1) << ", dt=" << dt_;
+  out << "offset=" << std::fixed << x_(0) << ", skew=" << x_(1) << ", dt=" << lastUpdateDt_;
 }
 
 void KalmanOwt::reset() {
@@ -57,15 +57,16 @@ LocalTime KalmanOwt::updateAndTranslateToLocalTimestamp(const RemoteTime remoteT
 
   const double dt = remoteTimeTics - lastUpdateDeviceTime_;
 
-  if(dt >= config.updateRate){
-    dt_=dt;
-    Eigen::Matrix2d F;
-    F << 1, dt_, 0, 1;
+  if(dt >= config.updateCooldownSecs){
+    // Save some values for later usage
+    lastUpdateDeviceTime_ = remoteTimeTics;
+    lastUpdateDt_ = dt;
 
     // Prediction
+    Eigen::Matrix2d F;
+    F << 1, dt, 0, 1;
     x_ = F * x_;
-    P_ = F * P_ * F.transpose() + dt_ * Q_;
-    lastUpdateDeviceTime_ = remoteTimeTics;
+    P_ = F * P_ * F.transpose() + dt * Q_;
 
     // Update
     const double S = H_ * P_ * H_.transpose() + R_;
